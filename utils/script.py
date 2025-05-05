@@ -65,15 +65,15 @@ with open('archive/books.csv', 'r', encoding='utf-8') as csvfile:
         d = date(year, month, day)
 
         
-        # create_book(title=row[1],
-        #             author_names=row[2].split("/"),
-        #             average_rating=float(row[3]), 
-        #             isbn=row[4], 
-        #             isbn13=row[5], 
-        #             language=language, 
-        #             num_pages=int(row[7]),
-        #             ratings_count=int(row[8]), 
-        #             text_reviews_count=int(row[9]), 
-        #             publication_date=d,
-        #             publisher=row[11], 
-        #             )
+        create_book(title=row[1],
+                    author_names=row[2].split("/"),
+                    average_rating=float(row[3]), 
+                    isbn=row[4], 
+                    isbn13=row[5], 
+                    language=language, 
+                    num_pages=int(row[7]),
+                    ratings_count=int(row[8]), 
+                    text_reviews_count=int(row[9]), 
+                    publication_date=d,
+                    publisher=row[11], 
+                    )
