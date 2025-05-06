@@ -1,7 +1,7 @@
 from database.models import SessionLocal, Book, Author, BookAuthor
 from typing import List, Optional
 from datetime import date
-
+import logging
 
 def create_book(
         title: str,
@@ -53,8 +53,11 @@ def create_book(
         db.commit()
         db.refresh(book)
 
+        logging.info(f"Книга {title} была добавлена в базу данных")
+
     except Exception as e:
         db.rollback()
+        logging.error(f"Ошибка при создании книги: {str(e)}")
         raise ValueError(f"Ошибка при создании книги: {str(e)}")
     
     finally:
