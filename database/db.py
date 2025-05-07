@@ -57,6 +57,7 @@ def create_book(
 
         logging.debug(f"Книга {book.title} успешно добавлена в базу данных")
 
+
     except Exception as e:
         db.rollback()
         logging.error(f"Ошибка при создании книги: {str(e)}")
