@@ -1,7 +1,9 @@
 from database.models import SessionLocal, Book, Author, BookAuthor
 from typing import List, Optional
 from datetime import date
-
+from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
+import logging
 
 def create_book(
         title: str,
@@ -53,9 +55,77 @@ def create_book(
         db.commit()
         db.refresh(book)
 
+        logging.debug(f"Книга {book.title} успешно добавлена в базу данных")
+
     except Exception as e:
         db.rollback()
+        logging.error(f"Ошибка при создании книги: {str(e)}")
         raise ValueError(f"Ошибка при создании книги: {str(e)}")
+    
+    finally:
+        db.close()
+
+def get_book(
+            title: Optional[str] = None, 
+            language: Optional[str] = None, 
+            isbn: Optional[str] = None, 
+            author: Optional[str] = None
+        ):
+    db = SessionLocal()
+
+    try:
+        query = db.query(Book).options(joinedload(Book.authors))
+
+        if title:
+            query = query.filter(Book.title.ilike(f"%{title}%"))
+        elif language:
+            query = query.filter(Book.language == language)
+        elif isbn:
+            query = query.filter(or_(Book.isbn == isbn,Book.isbn13 == isbn))
+        elif author:
+            query = query.join(Book.authors).filter(Author.name.ilike(f"%{author}%"))
+        
+        logging.debug(f"Книга по запросу успешно найдена")
+
+        return query.first()
+
+    except Exception as e:
+        logging.error(f"Ошибка при получении книги: {str(e)}")
+        raise ValueError(f"Ошибка при получении книги: {str(e)}")
+    
+    finally:
+        db.close()
+
+def get_languages(index: int):
+    db = SessionLocal()
+
+    try:
+        languages = db.query(Book.language).distinct().limit(5).offset(index).all()
+
+        logging.debug(f"Языки успешно получены")
+
+        return languages
+    
+    except Exception as e:
+        logging.error(f"Ошибка при получении языков: {str(e)}")
+        raise ValueError(f"Ошибка при получении языков: {str(e)}")
+    
+    finally:
+        db.close()
+
+def get_count_of_languages():
+    db = SessionLocal()
+
+    try:
+        count = db.query(Book.language).distinct().count()
+
+        logging.debug(f"Количество языков успешно получено")
+
+        return count
+    
+    except Exception as e:
+        logging.error(f"Ошибка при получении количества языков: {str(e)}")
+        raise ValueError(f"Ошибка при получении количества языков: {str(e)}")
     
     finally:
         db.close()

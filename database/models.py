@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Date, Fore
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
 from dotenv import load_dotenv
 import os
+import logging
 
 load_dotenv()
 
@@ -9,8 +10,14 @@ PASSWORD = os.getenv("DB_PASSWORD")
 
 DATABASE_URL = f"postgresql://postgres:{PASSWORD}@localhost:5432/librarycollection"
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+try:
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+
+except Exception as e:
+    logging.error(f"Ошибка при подключении к базе данных: {str(e)}")
+    raise e(f"Ошибка при подключении к базе данных: {str(e)}")
+
 
 Base = declarative_base()
 
