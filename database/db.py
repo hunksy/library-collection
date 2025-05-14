@@ -72,6 +72,7 @@ def create_book(
         db.close()
 
 def get_books(
+            id: Optional[int] = None,
             title: Optional[str] = None, 
             language: Optional[str] = None, 
             isbn: Optional[str] = None, 
@@ -82,7 +83,9 @@ def get_books(
     try:
         query = db.query(Book).options(joinedload(Book.authors))
 
-        if title:
+        if id:
+            query = query.filter(Book.id == id)
+        elif title:
             query = query.filter(Book.title.ilike(f"%{title}%"))
         elif language:
             query = query.filter(Book.language == language)
@@ -233,5 +236,144 @@ def cancel_current_booking(booking: Booking):
         db.rollback()
         logging.error(f"Ошибка отмены брони: {e}")
         raise ValueError(f"Ошибка отмены брони: {str(e)}")
+    finally:
+        db.close()
+
+def get_author_info(id: Optional[int] = None, name: Optional[str] = None):
+    db = SessionLocal()
+
+    try:
+        query = db.query(Author)
+
+        if id:
+            query = query.filter(Author.id == id)
+        elif name:
+            query = query.filter(Author.name.ilike(f"%{name}%"))
+        
+        logging.debug(f"Автор по запросу успешно найден")
+
+        return query.first()
+
+    except Exception as e:
+        logging.error(f"Ошибка при получении автора: {str(e)}")
+        raise ValueError(f"Ошибка при получении автора: {str(e)}")
+    
+    finally:
+        db.close()
+
+def get_user_info(user_id: Optional[int] = None, name: Optional[str] = None, phone: Optional[int] = None):
+    db = SessionLocal()
+
+    try:
+        query = db.query(User)
+
+        if user_id:
+            query = query.filter(User.user_id == user_id)
+        elif name:
+            query = query.filter(User.fullname.ilike(f"%{name}%"))
+        elif phone:
+            query = query.filter(User.phone_number == phone)
+        
+        logging.debug(f"Пользователь по запросу успешно найден")
+
+        return query.first()
+
+    except Exception as e:
+        logging.error(f"Ошибка при получении пользователя: {str(e)}")
+        raise ValueError(f"Ошибка при получении пользователя: {str(e)}")
+    
+    finally:
+        db.close()
+
+def get_booking_info( 
+                    id: Optional[int] = None, 
+                    phone: Optional[int] = None, 
+                    isbn: Optional[str] = None):
+    db = SessionLocal()
+
+    try:
+        query = db.query(Booking).options(joinedload(Booking.user), joinedload(Booking.book))
+        
+        if id:
+            query = query.filter(Booking.id == id)
+        
+        elif phone:
+            query = query.join(User).filter(User.phone_number == phone).order_by(Booking.booking_date.desc())
+        
+        elif isbn:
+            query = query.join(Book).filter(or_ (Book.isbn == isbn, Book.isbn13 == isbn)).order_by(Booking.booking_date.desc())
+        
+        return query.first()
+
+    except Exception as e:
+        logging.error(f"Ошибка поиска бронирования: {str(e)}")
+        raise ValueError(f"Ошибка при получении бронирования: {str(e)}")
+    
+    finally:
+        db.close()
+
+def delete_record(book: Optional[Book] = None, 
+                author: Optional[Author] = None, 
+                user: Optional[User] = None, 
+                booking: Optional[Booking] = None):
+    
+    db = SessionLocal()
+
+    try:
+        if book:
+            book = db.merge(book)
+            db.delete(book)
+        elif author:
+            author = db.merge(author)
+            db.delete(author)
+        elif user:
+            user = db.merge(user)
+            db.delete(user)
+        elif booking:
+            booking = db.merge(booking)
+            db.delete(booking)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Ошибка удаления записи: {e}")
+        raise ValueError(f"Ошибка удаления записи: {str(e)}")
+    finally:
+        db.close()
+
+def edit_record(book: Optional[Book] = None, 
+                author: Optional[Author] = None, 
+                user: Optional[User] = None, 
+                booking: Optional[Booking] = None,
+                column: Optional[str] = None,
+                value: Optional[str] = None):
+    db = SessionLocal()
+
+    try:
+        if book:
+            db.add(book)
+            if column == "title":
+                book.title = value
+        elif author:
+            db.add(author)
+            if column == "name":
+                author.name = value
+        elif user:
+            db.add(user)
+            if column == "fullname":
+                user.fullname = value
+        elif booking:
+            db.add(booking)
+            if column == "status":
+                found_status = None
+                for status in BookingStatus:
+                    if status.value.lower() == value.lower():
+                        found_status = status
+                        break
+                booking.status = found_status
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Ошибка изменения записи: {e}")
+        raise ValueError(f"Ошибка изменения записи: {str(e)}")
     finally:
         db.close()
