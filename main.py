@@ -13,6 +13,9 @@ async def main():
         encoding="UTF-8",
         )
 
+    dispatcher_logger = logging.getLogger('aiogram')
+    dispatcher_logger.setLevel(logging.WARNING)
+
     dp.include_routers(user_router)
 
     logging.info("Бот запущен")
