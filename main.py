@@ -3,6 +3,7 @@ import logging
 from bot import bot, dp
 
 from handlers.user import user_router
+from handlers.admin import admin_router
 
 async def main():
     logging.basicConfig(
@@ -16,7 +17,7 @@ async def main():
     dispatcher_logger = logging.getLogger('aiogram')
     dispatcher_logger.setLevel(logging.WARNING)
 
-    dp.include_routers(user_router)
+    dp.include_routers(admin_router, user_router)
 
     logging.info("Бот запущен")
     await dp.start_polling(bot)

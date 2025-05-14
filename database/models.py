@@ -39,6 +39,7 @@ class Book(Base):
     publisher = Column(String)
     count_in_fund = Column(Integer, default=1)
     authors = relationship("Author", secondary="book_authors", back_populates="books")
+    bookings = relationship("Booking", back_populates="book", cascade="all, delete-orphan")
 
     def is_available(self):
         return self.count_in_fund > 0
@@ -51,8 +52,8 @@ class Author(Base):
 
 class BookAuthor(Base):
     __tablename__ = 'book_authors'
-    book_id = Column(Integer, ForeignKey('books.id'), primary_key=True)
-    author_id = Column(Integer, ForeignKey('authors.id'), primary_key=True)
+    book_id = Column(Integer, ForeignKey('books.id', ondelete="CASCADE"), primary_key=True)
+    author_id = Column(Integer, ForeignKey('authors.id', ondelete="CASCADE"), primary_key=True)
 
 class User(Base):
     __tablename__ = 'users'
@@ -60,7 +61,7 @@ class User(Base):
     fullname = Column(String(100))
     age = Column(Integer)
     phone_number = Column(BigInteger)
-    bookings = relationship("Booking", back_populates="user")
+    bookings = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
 
 class BookingStatus(PyEnum):
     RESERVED = 'Забронирована'
@@ -71,8 +72,8 @@ class BookingStatus(PyEnum):
 class Booking(Base):
     __tablename__ = 'bookings'
     id = Column(Integer, primary_key=True)
-    user_id = Column(BigInteger, ForeignKey('users.user_id'))
-    book_id = Column(Integer, ForeignKey('books.id'))
+    user_id = Column(BigInteger, ForeignKey('users.user_id', ondelete="CASCADE"))
+    book_id = Column(Integer, ForeignKey('books.id', ondelete="CASCADE"))
     booking_date = Column(DateTime, default=datetime.now())
     booking_deadline = Column(DateTime, nullable=True)
     pick_up_date = Column(Date, nullable=True)
