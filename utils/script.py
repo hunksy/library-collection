@@ -18,6 +18,7 @@ import time
 
 from database.db import create_book
 from datetime import date
+import random
 
 langs = {
     'en-CA': 'Английский (Канада)', 
@@ -50,6 +51,8 @@ langs = {
     'tur': 'Турецкий'
 }
 
+age_limits = [0, 6, 12, 16, 18]
+
 #translator = Translator(to_lang="ru", translator="yandex")
 with open('archive/books.csv', 'r', encoding='utf-8') as csvfile:
     csvreader = csv.reader(csvfile)
@@ -59,7 +62,7 @@ with open('archive/books.csv', 'r', encoding='utf-8') as csvfile:
         if(not(row[6].isdigit() or row[6] == 'language_code')):
             language = langs[row[6]]
 
-        print(f'{row[0]} - {row[10].split("/")}')
+        #print(f'{row[0]} - {row[10].split("/")}')
         
         month, day, year = map(int, row[10].split("/"))
         d = date(year, month, day)
@@ -73,7 +76,9 @@ with open('archive/books.csv', 'r', encoding='utf-8') as csvfile:
                     language=language, 
                     num_pages=int(row[7]),
                     ratings_count=int(row[8]), 
-                    text_reviews_count=int(row[9]), 
+                    pick_up_count=int(row[9]), 
                     publication_date=d,
-                    publisher=row[11], 
+                    publisher=row[11],
+                    count_in_fund=random.randint(1,10),
+                    age_limit=random.choice(age_limits),
                     )
