@@ -116,25 +116,19 @@ async def cmd_menu(message: types.Message):
     await show_menu(message)
 
 
-async def cancel_search(message: types.Message, state: FSMContext):
-    """Функция отмены поиска"""
-
-    await message.delete()
-    await state.clear()
-    await show_menu(message)
-
 @user_router.message(F.text.lower().contains("отмена"))
 async def cancel_reply(message: types.Message, state: FSMContext):
     """Отмена через Reply-кнопку"""
-
-    await cancel_search(message, state)
+    await state.clear()
+    await show_menu(message)
 
 
 @user_router.callback_query(F.data == "cancel_search")
 async def cancel_search_inline(call: types.CallbackQuery, state: FSMContext):
     """Отмена поиска через Inline-кнопку"""
-
-    await cancel_search(call.message, state)
+    await call.message.delete()
+    await state.clear()
+    await show_menu(message)
 
 
 @user_router.callback_query(F.data == "search_book")

@@ -211,6 +211,10 @@ def reserve_book(user_id: int, book_id: int):
         booking.set_booking_deadline(days=3)
 
         db.add(booking)
+        db.flush()
+
+        booking.book.count_in_fund -= 1
+
         db.commit()
         db.refresh(booking)
 
@@ -230,7 +234,7 @@ def cancel_current_booking(booking: Booking):
     db = SessionLocal()
     try:
         db.add(booking)
-        booking.status = BookingStatus.CANCELED
+        booking.cancel()
         db.commit()
 
         logging.debug(f"Бронировани успешно отменено")
