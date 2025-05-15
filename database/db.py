@@ -203,24 +203,29 @@ def reserve_book(user_id: int, book_id: int):
     db = SessionLocal()
 
     try:
-        booking = Booking(
-            user_id=user_id,
-            book_id=book_id,
-            booking_date = datetime.now()
-        )
-        booking.set_booking_deadline(days=3)
+        book = db.query(Book).filter(Book.id == book_id).first()
+        
+        if book.is_available():
+            booking = Booking(
+                user_id=user_id,
+                book_id=book_id,
+                booking_date = datetime.now()
+            )
+            booking.set_booking_deadline(days=3)
 
-        db.add(booking)
-        db.flush()
+            db.add(booking)
+            db.flush()
 
-        booking.book.count_in_fund -= 1
+            booking.book.count_in_fund -= 1
 
-        db.commit()
-        db.refresh(booking)
+            db.commit()
+            db.refresh(booking)
 
-        logging.debug(f"Бронирование {booking.id} успешно создано")
+            logging.debug(f"Бронирование {booking.id} успешно создано")
 
-        return booking
+            return booking
+        else:
+            return None
     
     except Exception as e:
         db.rollback()
@@ -378,6 +383,7 @@ def edit_record(book: Optional[Book] = None,
             logging.debug(f"Значение поля {column} пользователя успешно изменено")
         elif booking:
             db.add(booking)
+            db.flush()
             if column == "status":
                 found_status = None
                 for status in BookingStatus:
@@ -385,6 +391,12 @@ def edit_record(book: Optional[Book] = None,
                         found_status = status
                         break
                 booking.status = found_status
+
+                if found_status == BookingStatus.RETURNED:
+                    booking.return_date = datetime.now()
+                    booking.book.pick_up_count += 1
+                    booking.book.count_in_fund += 1
+
             logging.debug(f"Значение поля {column} бронирования успешно изменено")
         db.commit()
 

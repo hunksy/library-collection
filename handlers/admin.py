@@ -1,14 +1,33 @@
 from aiogram import types, F, Router
 from aiogram.filters.command import Command
 from bot import ADMIN
-from utils.keyboards import keyboard_admin_panel, keyboard_admin_books, keyboard_admin_authors, keyboard_admin_users, keyboard_admin_bookings, keyboard_edit, keyboard_edit_book, keyboard_edit_author, keyboard_edit_user, keyboard_edit_booking
-import logging
+from utils.keyboards import (
+    keyboard_admin_panel, keyboard_admin_books, 
+    keyboard_admin_authors, keyboard_admin_users, 
+    keyboard_admin_bookings, keyboard_edit, 
+    keyboard_edit_book, keyboard_edit_author, 
+    keyboard_edit_user, keyboard_edit_booking
+)
+from bot import bot
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from database.db import create_book, get_books, get_author_info, get_user_info, get_booking_info, delete_record, edit_record
+from database.db import (
+    create_book, get_books, 
+    get_author_info, get_user_info, 
+    get_booking_info, delete_record, 
+    edit_record
+)
 from datetime import datetime
 from handlers.user import BOOK_PHOTO_ID
 from database.models import BookingStatus
+from utils.math import get_demand_index, calculate_balance_coefficient
+from utils.validators import (
+    validate_fullname, validate_int_values,
+    validate_phone_number, validate_isbn,
+    validate_active_booking, validate_book_availability,
+    validate_authors, validate_date,
+    validate_booking_status,
+)
 
 PANEL_PHOTO_ID = "AgACAgIAAxkBAAICgmgksbhPsOYcQM7hB4Zju6a_GeCrAAI1-TEbFKIoSUsGtUsUHt9hAQADAgADcwADNgQ"
 AUTHOR_PHOTO_ID = "AgACAgIAAxkBAAIC5mgk_U_ZyBvSklcnvHHsvEa78ZU0AALt-zEbFKIoSbtXDjUq137fAQADAgADcwADNgQ"
@@ -80,28 +99,19 @@ async def get_title(message: types.Message, state: FSMContext):
 @admin_router.message(AddBookStates.waiting_for_author)
 async def get_author(message: types.Message, state: FSMContext):
     """Получение автора книги и запрос ISBN-10"""
-    authors = []
-    for author in message.text.split(","):
-        if author != "":
-            authors.append(author.strip())
-
-    await state.update_data(authors=authors)
-    await message.answer("Введите ISBN книги в формате 10 цифр\n\nПример:\n<blockquote>0439785960</blockquote>")
-    await state.set_state(AddBookStates.waiting_for_isbn)
+    authors = validate_authors(message.text)
+    if authors:
+        await state.update_data(authors=authors)
+        await message.answer("Введите ISBN книги в формате 10 цифр\n\nПример:\n<blockquote>0439785960</blockquote>")
+        await state.set_state(AddBookStates.waiting_for_isbn)
+    else:
+        await message.answer("Нужно указать хотя бы одного автора")
 
 
 @admin_router.message(AddBookStates.waiting_for_isbn)
 async def get_isbn(message: types.Message, state: FSMContext):
     """Получение ISBN-10 книги и запрос ISBN-13"""
-    is_valid = True
-    if len(message.text) != 10:
-        is_valid = False
-    else:
-        for symbol in message.text:
-            if not symbol.isdigit() or symbol == "X":
-                is_valid = False
-                break
-    if is_valid:
+    if validate_isbn(message.text):
         await state.update_data(isbn=message.text)
         await message.answer("Введите ISBN книги в формате 13 цифр\n\nПример:\n<blockquote>9780679767473</blockquote>")
         await state.set_state(AddBookStates.waiting_for_isbn13)
@@ -112,15 +122,7 @@ async def get_isbn(message: types.Message, state: FSMContext):
 @admin_router.message(AddBookStates.waiting_for_isbn13)
 async def get_isbn13(message: types.Message, state: FSMContext):
     """Получение ISBN-13 книги и языка издания"""
-    is_valid = True
-    if len(message.text) != 13:
-        is_valid = False
-    else:
-        for symbol in message.text:
-            if not symbol.isdigit():
-                is_valid = False
-                break
-    if is_valid:
+    if validate_isbn(message.text):
         await state.update_data(isbn13=message.text)
         await message.answer("Введите язык издания книги\n\nПример:\n<blockquote>Английский (США)</blockquote>")
         await state.set_state(AddBookStates.waiting_for_language)
@@ -139,9 +141,8 @@ async def get_language(message: types.Message, state: FSMContext):
 @admin_router.message(AddBookStates.waiting_for_num_pages)
 async def get_num_pages(message: types.Message, state: FSMContext):
     """Получение количества страниц и запрос даты публикации"""
-    number = int(message.text)
-    if number > 0:
-        await state.update_data(num_pages=number)
+    if validate_int_values(message.text):
+        await state.update_data(num_pages=int(message.text))
         await message.answer("Введите дату публикации книги в формате ДД.ММ.ГГГГ\n\nПример:\n<blockquote>16.09.2006</blockquote>")
         await state.set_state(AddBookStates.waiting_for_publication_date)
     else:
@@ -151,19 +152,14 @@ async def get_num_pages(message: types.Message, state: FSMContext):
 @admin_router.message(AddBookStates.waiting_for_publication_date)
 async def get_publication_date(message: types.Message, state: FSMContext):
     """Получение даты публикации и запрос издательства"""
-    date = message.text.split(".")
-    if len(date) == 3:
-        day = int(date[0])
-        month = int(date[1])
-        if day > 0 and day < 32 and month > 0 and month < 13:
-            date = datetime.strptime(message.text, "%d.%m.%Y")
-            await state.update_data(publication_date=date)
-            await message.answer("Введите издательство книги")
-            await state.set_state(AddBookStates.waiting_for_publisher)
-        else:
-            await message.answer("Дата публикации введена некорректно")
+    date = validate_date(message.text)
+    if date:
+        await state.update_data(publication_date=date)
+        await message.answer("Введите издательство книги")
+        await state.set_state(AddBookStates.waiting_for_publisher)
     else:
         await message.answer("Дата публикации введена некорректно")
+
 
 
 @admin_router.message(AddBookStates.waiting_for_publisher)
@@ -177,47 +173,37 @@ async def get_publisher(message: types.Message, state: FSMContext):
 @admin_router.message(AddBookStates.waiting_for_count_in_fund)
 async def get_count_in_fund(message: types.Message, state: FSMContext):
     """Получение количества в наличии и запрос возрастного ограничения"""
-    if message.text.isdigit():
-        count = int(message.text)
-        if count > 0:
-            await state.update_data(count_in_fund=count)
-            await message.answer("Введите возрастное ограничение книги")
-            await state.set_state(AddBookStates.waiting_for_age_limit)
-        else:
-            await message.answer("Количество книг в наличии должно быть больше 0")
+    if validate_int_values(message.text):
+        await state.update_data(count_in_fund=int(message.text))
+        await message.answer("Введите возрастное ограничение книги")
+        await state.set_state(AddBookStates.waiting_for_age_limit)
     else:
-        await message.answer("Количество книг в наличии должно быть числом")
+        await message.answer("Количество книг в наличии должно быть числом больше 0")
 
 
 @admin_router.message(AddBookStates.waiting_for_age_limit)
 async def get_age_limit(message: types.Message, state: FSMContext):
     """Получение возрастного ограничения и добавление книги"""
     data = await state.get_data()
-    if message.text.isdigit():
-        age_limit = int(message.text)
-        if age_limit >= 0:
-            try:
-                create_book(title=data.get("title"),
-                            isbn=data.get("isbn"),
-                            isbn13=data.get("isbn"),
-                            num_pages=data.get("num_pages"),
-                            publisher=data.get("publisher"),
-                            publication_date=data.get("publication_date"),
-                            age_limit=age_limit,
-                            count_in_fund=data.get("count_in_fund"),
-                            author_names=data.get("authors"),
-                            language=data.get("language"),
-                            )
-                await message.answer("Книга успешно добавлена")
-
-            except ValueError as e:
-                await message.answer(f"{str(e)}")
-
-            await state.clear()
-        else:
-            await message.answer("Возрастное ограничение должно быть больше или равно 0")
+    if validate_int_values(message.text):
+        try:
+            create_book(title=data.get("title"),
+                        isbn=data.get("isbn"),
+                        isbn13=data.get("isbn13"),
+                        num_pages=data.get("num_pages"),
+                        publisher=data.get("publisher"),
+                        publication_date=data.get("publication_date"),
+                        age_limit=int(message.text),
+                        count_in_fund=data.get("count_in_fund"),
+                        author_names=data.get("authors"),
+                        language=data.get("language"),
+                        )
+            await message.answer("Книга успешно добавлена")
+        except ValueError as e:
+            await message.answer(f"{str(e)}")
+        await state.clear()
     else:
-        await message.answer("Возрастное ограничение должно быть числом")
+        await message.answer("Возрастное ограничение должно быть числом больше 0")
 
 
 @admin_router.callback_query(F.data.startswith("find"))
@@ -268,23 +254,14 @@ async def search_record(message: types.Message, state: FSMContext):
             error = None
 
             if column == "id":
-                if request.isdigit():
+                if validate_int_values(request):
                     books = get_books(id=int(request))
                 else:
                     error = "ID книги введено некорректно"
             elif column == "title":
                 books = get_books(title=request)
             elif column == "isbn":
-                is_valid = True
-                if len(request) != 10 and len(request) != 13:
-                    is_valid = False
-                else:
-                    for symbol in request:
-                        if not symbol.isdigit() or symbol == "X":
-                            is_valid = False
-                            break
-                
-                if is_valid:
+                if validate_isbn(request):
                     books = get_books(isbn=request)
                 else:
                     error = "ISBN введен некорректно"
@@ -318,7 +295,7 @@ async def search_record(message: types.Message, state: FSMContext):
             error = None
 
             if column == "id":
-                if request.isdigit():
+                if validate_int_values(request):
                     author = get_author_info(id=int(request))
                 else:
                     error = "ID автора введено некорректно"
@@ -343,15 +320,16 @@ async def search_record(message: types.Message, state: FSMContext):
             error = None
 
             if column == "id":
-                if request.isdigit():
+                if validate_int_values(request):
                     user = get_user_info(user_id=int(request))
                 else:
                     error = "ID пользователя введено некорректно"
             elif column == "name":
                 user = get_user_info(name=request)
             elif column == "phone":
-                if request.isdigit() and len(request) == 11:
-                    user = get_user_info(phone=int(request))
+                phone=validate_phone_number(message)
+                if phone:
+                    user = get_user_info(phone=phone)
                 else:
                     error = "Номер телефона пользователя введен некорректно"
 
@@ -375,29 +353,21 @@ async def search_record(message: types.Message, state: FSMContext):
             error = None
 
             if column == "id":
-                if request.isdigit():
+                if validate_int_values(request):
                     booking = get_booking_info(id=int(request))
                 else:
                     error = "ID пользователя введено некорректно"
 
             elif column == "isbn":
-                is_valid = True
-                if len(request) != 10 and len(request) != 13:
-                    is_valid = False
-                else:
-                    for symbol in request:
-                        if not symbol.isdigit() or symbol == "X":
-                            is_valid = False
-                            break
-                
-                if is_valid:
+                if validate_isbn(request):
                     booking = get_booking_info(isbn=request)
                 else:
                     error = "ISBN введен некорректно"
 
             elif column == "phone":
-                if request.isdigit() and len(request) == 11:
-                    booking = get_booking_info(phone=int(request))
+                phone = validate_phone_number(message)
+                if phone:
+                    booking = get_booking_info(phone=phone)
                 else:
                     error = "Номер телефона пользователя введен некорректно"
 
@@ -492,20 +462,55 @@ async def edit_message(message: types.Message, state: FSMContext):
                 edit_record(user=data.get("user"), column=column, value=message.text)
         elif model == "booking":
             if column == "status":
-                found_status = None
-                for status in BookingStatus:
-                    if status.value.lower() == message.text.lower():
-                        found_status = status
-                        break
+                found_status = validate_booking_status(message.text)
 
                 if found_status:
-                    edit_record(booking=data.get("booking"), column=column, value=message.text)
+                    booking=data.get("booking")
+                    book_id = booking.book_id
+                    book_title = booking.book.title
+                    user_id = booking.user_id
+                    edit_record(booking=booking, column=column, value=message.text)
+                    if found_status == BookingStatus.RETURNED:
+                        keyboard_book_rating = types.InlineKeyboardMarkup(inline_keyboard=[
+                            [types.InlineKeyboardButton(text="⭐️", callback_data=f"rate_book_{book_id}_1")],
+                            [types.InlineKeyboardButton(text="⭐️⭐️", callback_data=f"rate_book_{book_id}_2")],
+                            [types.InlineKeyboardButton(text="⭐️⭐️⭐️", callback_data=f"rate_book_{book_id}_3")], 
+                            [types.InlineKeyboardButton(text="⭐️⭐️⭐️⭐️", callback_data=f"rate_book_{book_id}_4")],
+                            [types.InlineKeyboardButton(text="⭐️⭐️⭐️⭐️⭐️", callback_data=f"rate_book_{book_id}_5")]
+                        ])
+                        await bot.send_message(chat_id=user_id, text=f'Оцените кнгигу "{book_title}"', reply_markup=keyboard_book_rating)
                 else:
                     await message.answer("Статус бронирования введен некорректно")
         await message.answer("Запись успешно изменена")
         await state.clear()
     except ValueError as e:
         await message.answer(f"{str(e)}")
+
+
+@admin_router.callback_query(F.data == "statistics")
+async def show_statistics(call: types.CallbackQuery):
+    try:
+        statistic_demand = get_demand_index()
+        
+        if not statistic_demand:
+            await call.message.answer("Нет данных о востребованности книг")
+            return
+
+        top_books = statistic_demand[:15]
+        coefficient = calculate_balance_coefficient()
+        result = f"<b>🧮 Коэффициент баланса фонда:</b> {round(coefficient, 1)}\n\n<b>📊 Топ-15 востребованных книг:</b>\n\n"
+        
+        for idx, book in enumerate(top_books, 1):
+            result += (
+                f"📒 {idx}. <i>{book['title']}</i>\n"
+                f"- Индекс: <b>{book['demand']}</b>\n"
+                f"- Востребована больше, чем <b>{book['percentile']}%</b> книг в фонде\n"
+            )
+
+        await call.message.answer(result)
+
+    except Exception as e:
+        await call.message.answer(f"{str(e)}")
 
 
 # @admin_router.message()

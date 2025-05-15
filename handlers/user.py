@@ -1,11 +1,25 @@
 from aiogram import types, Router, F
 from aiogram.filters.command import Command
 import logging
-from utils.keyboards import keyboard_menu, keyboard_search, buttons_lang_arrows, keyboard_cancel_search, buttons_book_arrows, keyboard_send_contact
+from utils.keyboards import (
+    keyboard_menu, keyboard_search, 
+    buttons_lang_arrows, keyboard_cancel_search, 
+    buttons_book_arrows, keyboard_send_contact)
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from database.db import get_books, get_languages, get_count_of_languages, register_user, last_booking, has_registration, reserve_book, cancel_current_booking
+from database.db import (
+    get_books, get_languages, 
+    get_count_of_languages, register_user, 
+    last_booking, has_registration, reserve_book, 
+    cancel_current_booking
+)
 from database.models import BookingStatus
+from utils.math import add_rating
+from utils.validators import (
+    validate_fullname, validate_int_values,
+    validate_phone_number, validate_isbn,
+    validate_active_booking, validate_book_availability
+)
 
 MENU_PHOTO_ID = "AgACAgIAAxkBAAIBX2gjNZvsw4OBVodhbiZkgJsI7bE2AAJl9TEb6pwZSYp6A4dviAuOAQADAgADcwADNgQ"
 BOOK_PHOTO_ID = "AgACAgIAAxkBAAPyaCJrt5YFCWN4BG9gGuJbOGCFNHcAAon3MRvqnBFJ7ZLyAf13JFcBAAMCAANzAAM2BA"
@@ -34,11 +48,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @user_router.message(States.waiting_for_fullname)
 async def get_fullname(message: types.Message, state: FSMContext):
     """Получение ФИО и запрос возраста"""
-
-    fullname = message.text
-    if len(fullname.split(" ")) == 3:
+    if validate_fullname(message.text):
         await state.update_data(fullname=message.text)
-
         await message.answer("Введите ваш полный возраст")
         await state.set_state(States.waiting_for_age)
     else:
@@ -48,11 +59,8 @@ async def get_fullname(message: types.Message, state: FSMContext):
 @user_router.message(States.waiting_for_age)
 async def get_age(message: types.Message, state: FSMContext):
     """Получение возраста и запрос номера"""
-
-    age = message.text
-    if age.isdigit():
+    if validate_int_values(message.text):
         await state.update_data(age=int(message.text))
-
         await message.answer("Введите ваш номер телефона или нажмите кнопку отправить контакт", reply_markup=keyboard_send_contact)
         await state.set_state(States.waiting_for_phone_number)
     else:
@@ -62,24 +70,11 @@ async def get_age(message: types.Message, state: FSMContext):
 @user_router.message(States.waiting_for_phone_number)
 async def get_age(message: types.Message, state: FSMContext):
     """Получение номера и регистрация"""
-
-    phone_number = ""
-    if message.contact:
-        if message.contact.user_id == message.from_user.id:
-            phone_number = message.contact.phone_number
-            phone_number = phone_number.replace("+", "")
-        else:
-            await message.answer("Это не ваш контакт, попробуйте снова")
-    else:
-        for symbol in message.text:
-            if symbol.isdigit():
-                phone_number += symbol
-
-    if phone_number != None and len(phone_number) == 11:
+    phone_number = validate_phone_number(message)
+    if phone_number:
         data = await state.get_data()
         fullname = data.get("fullname")
         age = data.get("age")
-        phone_number = int(phone_number)
         try:
             await state.clear()
             register_user(user_id=message.from_user.id, fullname=fullname, age=age, phone_number=phone_number)
@@ -93,15 +88,12 @@ async def get_age(message: types.Message, state: FSMContext):
 @user_router.message(Command("id"))
 async def cmd_id(message: types.Message):
     """Команда для получения id, чтобы определеить админа в .env"""
-
     logging.info(f"Пользователь {message.from_user.id} использовал команду /id")
-
     await message.answer(f"Ваш id: {message.from_user.id}")
 
 
 async def show_menu(message: types.Message):
     """Фукнция для отправки меню."""
-
     if has_registration(message.from_user.id):
         await message.answer_photo(photo=MENU_PHOTO_ID, caption="<b>Главное меню:</b>", reply_markup=keyboard_menu)
     else:
@@ -110,10 +102,15 @@ async def show_menu(message: types.Message):
 
 
 @user_router.message(Command("menu"))
-async def cmd_menu(message: types.Message): 
+async def cmd_menu(message: types.Message, state: FSMContext): 
     """Команда для отправки меню"""
-
+    await state.clear()
     await show_menu(message)
+
+
+@user_router.callback_query(F.data == "back_to_menu")
+async def back_to_menu(call: types.callback_query):
+    await call.message.edit_reply_markup(reply_markup=keyboard_menu)
 
 
 @user_router.message(F.text.lower().contains("отмена"))
@@ -126,9 +123,9 @@ async def cancel_reply(message: types.Message, state: FSMContext):
 @user_router.callback_query(F.data == "cancel_search")
 async def cancel_search_inline(call: types.CallbackQuery, state: FSMContext):
     """Отмена поиска через Inline-кнопку"""
-    await call.message.delete()
     await state.clear()
-    await show_menu(message)
+    await call.message.delete()
+    await show_menu(call.message)
 
 
 @user_router.callback_query(F.data == "search_book")
@@ -235,7 +232,7 @@ async def generate_keyboard_books(book):
     keyboard_book = types.InlineKeyboardMarkup(inline_keyboard=[])
     keyboard_book.inline_keyboard.append(buttons_book_arrows)
     booking_button = []
-    if book.is_available():
+    if validate_book_availability(book):
         booking_button.append(types.InlineKeyboardButton(text="✅ Забронировать", callback_data=f"booking_{book.id}"))
     else:
         booking_button.append(types.InlineKeyboardButton(text="❌ Нет в наличии"))
@@ -302,11 +299,10 @@ async def search_by_request(message: types.Message, state: FSMContext):
         elif data.get("is_search_by_author"):
             books = get_books(author=message.text)
         elif data.get("is_search_by_isbn"):
-            isbn = message.text
-            if(len(isbn) != 10 and len(isbn) != 13):
-                await message.answer("ISBN должен состоять из 10 или 13 цифр")
+            if validate_isbn(message.text):
+                books = get_books(isbn=message.text)
             else:
-                books = get_books(isbn=isbn)
+                await message.answer("ISBN должен состоять из 10 или 13 цифр")
         
     except ValueError:
         message.answer("Возникла ошибка при поиске книги")
@@ -362,21 +358,24 @@ async def book_arrows(call: types.CallbackQuery, state: FSMContext):
 @user_router.callback_query(F.data.startswith("booking"))
 async def reserve_a_book(call: types.CallbackQuery):
     booking = last_booking(call.from_user.id)
-    if booking != None and booking.status == BookingStatus.RESERVED:
+    if validate_active_booking(booking):
         await call.answer("У вас уже есть бронь книги!", show_alert=True)
     else:
         book_id = int(call.data.split("_")[-1])
         new_booking = reserve_book(book_id=book_id, user_id=call.from_user.id)
-        deadline = new_booking.booking_deadline
-        deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
-        await call.message.answer(f"Книга успешно забронирована!\n"
-                                f"Получите её до {deadline} в библиотеке")
+        if new_booking:
+            deadline = new_booking.booking_deadline
+            deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
+            await call.message.answer(f"Книга успешно забронирована!\n"
+                                    f"Получите её до {deadline} в библиотеке")
+        else:
+            await call.answer(text="Книги нет в наличии", show_alert=True)
 
 
 @user_router.callback_query(F.data == "user_booking")
 async def show_user_booking(call: types.callback_query):
     booking = last_booking(call.from_user.id)
-    if booking != None and booking.status == BookingStatus.RESERVED:
+    if validate_active_booking(booking):
         book = booking.book
         deadline = booking.booking_deadline
         deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
@@ -408,12 +407,21 @@ async def show_user_booking(call: types.callback_query):
 @user_router.callback_query(F.data == "cancel_booking")
 async def cancel_booking(call: types.callback_query):
     current_booking = last_booking(call.from_user.id)
-    if current_booking != None and current_booking.status == BookingStatus.RESERVED:
+    if validate_active_booking(current_booking):
         cancel_current_booking(current_booking)
         await call.answer("Бронь книги успешна отменена!", show_alert=True)
         await call.message.delete()
     else:
         await call.answer("У вас нет действующей брони!", show_alert=True)
+
+
+@user_router.callback_query(F.data.startswith("rate_book"))
+async def rate_book(call: types.CallbackQuery):
+    book_id = int(call.data.split("_")[-2])
+    rating = int(call.data.split("_")[-1])
+    add_rating(book_id, rating)
+    await call.answer("Спасибо за оценку!", show_alert=True)
+    await call.message.delete()
 
 
 @user_router.message()

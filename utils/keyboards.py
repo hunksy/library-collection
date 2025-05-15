@@ -10,6 +10,7 @@ keyboard_search = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Искать по автору", callback_data="search_by_author"),],
     [InlineKeyboardButton(text="Искать по ISBN", callback_data="search_by_isbn"),],
     [InlineKeyboardButton(text="Искать по языку издания", callback_data="search_by_language"),],
+    [InlineKeyboardButton(text="↩️ Вернуться в меню", callback_data="back_to_menu")]
 ]) 
 
 buttons_lang_arrows = [
