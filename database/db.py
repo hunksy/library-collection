@@ -232,6 +232,8 @@ def cancel_current_booking(booking: Booking):
         db.add(booking)
         booking.status = BookingStatus.CANCELED
         db.commit()
+
+        logging.debug(f"Бронировани успешно отменено")
     except Exception as e:
         db.rollback()
         logging.error(f"Ошибка отмены брони: {e}")
@@ -303,6 +305,8 @@ def get_booking_info(
         elif isbn:
             query = query.join(Book).filter(or_ (Book.isbn == isbn, Book.isbn13 == isbn)).order_by(Booking.booking_date.desc())
         
+        logging.debug(f"Информация о бронировании успешно получена")
+        
         return query.first()
 
     except Exception as e:
@@ -323,15 +327,19 @@ def delete_record(book: Optional[Book] = None,
         if book:
             book = db.merge(book)
             db.delete(book)
+            logging.debug(f"Поле книги успешно удалено")
         elif author:
             author = db.merge(author)
             db.delete(author)
+            logging.debug(f"Поле автора успешно удалено")
         elif user:
             user = db.merge(user)
             db.delete(user)
+            logging.debug(f"Поле пользователя успешно удалено")
         elif booking:
             booking = db.merge(booking)
             db.delete(booking)
+            logging.debug(f"Поле бронирования успешно удалено")
         db.commit()
     except Exception as e:
         db.rollback()
@@ -353,14 +361,17 @@ def edit_record(book: Optional[Book] = None,
             db.add(book)
             if column == "title":
                 book.title = value
+            logging.debug(f"Значение поля {column} книги успешно изменено")
         elif author:
             db.add(author)
             if column == "name":
                 author.name = value
+            logging.debug(f"Значение поля {column} автора успешно изменено")
         elif user:
             db.add(user)
             if column == "fullname":
                 user.fullname = value
+            logging.debug(f"Значение поля {column} пользователя успешно изменено")
         elif booking:
             db.add(booking)
             if column == "status":
@@ -370,7 +381,9 @@ def edit_record(book: Optional[Book] = None,
                         found_status = status
                         break
                 booking.status = found_status
+            logging.debug(f"Значение поля {column} бронирования успешно изменено")
         db.commit()
+
     except Exception as e:
         db.rollback()
         logging.error(f"Ошибка изменения записи: {e}")

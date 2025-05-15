@@ -35,12 +35,14 @@ class EditBookStates(StatesGroup):
 
 @admin_router.message(Command("admin"), F.from_user.id == ADMIN)
 async def cmd_admin(message: types.Message, state: FSMContext):
+    """Вызов админ панели через /admin"""
     await state.clear()
     await message.answer_photo(photo=PANEL_PHOTO_ID, caption="<b>Админ-панель</b>\n\nВыберите с чем будете работать", reply_markup=keyboard_admin_panel)
 
 
 @admin_router.callback_query(F.data.startswith("crud"))
 async def edit_keyboard(call: types.CallbackQuery):
+    """Изменение клавиатуры взавизимости от модели"""
     table = call.data.split("_")[-1]
     if table == "books":
         await call.message.edit_reply_markup(reply_markup=keyboard_admin_books)
@@ -54,6 +56,7 @@ async def edit_keyboard(call: types.CallbackQuery):
 
 @admin_router.callback_query(F.data == "admin_panel")
 async def admin_panel(call: types.CallbackQuery, state: FSMContext):
+    """Вызов админ панели через кнопки"""
     await state.clear()
     await call.message.delete()
     await call.message.answer_photo(photo=PANEL_PHOTO_ID, caption="<b>Админ-панель</b>\n\nВыберите с чем будете работать", reply_markup=keyboard_admin_panel)
@@ -403,12 +406,16 @@ async def search_record(message: types.Message, state: FSMContext):
             elif booking:
                 await state.update_data(booking=booking)
 
+                date = booking.booking_date
+                date = f"{str(date.day).rjust(2, '0')}.{str(date.month).rjust(2, '0')}.{date.year} {str(date.hour).rjust(2, '0')}:{str(date.minute).rjust(2, '0')}"
+                deadline = booking.booking_deadline
+                deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
                 await message.answer_photo(photo=BOOKING_PHOTO_ID,
                                     caption=f"<b>🔐 ID:</b> <code>{booking.id}</code>\n\n"
                                     f"<b>📘 Книга:</b> <code>{booking.book.title}</code>\n"
                                     f"<b>👤 Пользователь:</b> <code>{booking.user.fullname}</code>\n"
-                                    f"<b>📅 Дата брони:</b> <code>{booking.booking_date}</code>\n"
-                                    f"<b>📅 Дата окончания брони:</b> <code>{booking.booking_deadline}</code>\n"
+                                    f"<b>📅 Дата брони:</b> <code>{date}</code>\n"
+                                    f"<b>📅 Дата окончания брони:</b> <code>{deadline}</code>\n"
                                     f"<b>🟢 Статус брони:</b> <code>{booking.status.value}</code>\n",
                                     reply_markup=keyboard_edit,
                                     )

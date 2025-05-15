@@ -374,7 +374,7 @@ async def reserve_a_book(call: types.CallbackQuery):
         book_id = int(call.data.split("_")[-1])
         new_booking = reserve_book(book_id=book_id, user_id=call.from_user.id)
         deadline = new_booking.booking_deadline
-        deadline = f"{deadline.day}.{deadline.month}.{deadline.year} {deadline.hour}:{deadline.minute}"
+        deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
         await call.message.answer(f"Книга успешно забронирована!\n"
                                 f"Получите её до {deadline} в библиотеке")
 
@@ -385,7 +385,7 @@ async def show_user_booking(call: types.callback_query):
     if booking != None and booking.status == BookingStatus.RESERVED:
         book = booking.book
         deadline = booking.booking_deadline
-        deadline = f"{deadline.day}.{deadline.month}.{deadline.year} {deadline.hour}:{deadline.minute}"
+        deadline = f"{str(deadline.day).rjust(2, '0')}.{str(deadline.month).rjust(2, '0')}.{deadline.year} {str(deadline.hour).rjust(2, '0')}:{str(deadline.minute).rjust(2, '0')}"
 
         if book != None:
             authors = ", ".join([author.name for author in book.authors]) if len(book.authors) > 1 else book.authors[0].name
